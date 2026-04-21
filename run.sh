@@ -6,10 +6,18 @@ export RDMAV_DRIVERS="${RDMAV_DRIVERS:-mlx5}"
 export NVSHMEM_REMOTE_TRANSPORT="${NVSHMEM_REMOTE_TRANSPORT:-none}"
 
 
-# Warn if MPS is not running. Affinity contexts (CU_EXEC_AFFINITY_TYPE_SM_COUNT)
-# need a live MPS control daemon; cuCtxCreate will fail without it.
+# Warn if MPS is not running, or if this process cannot reach its pipe
+# directory. Affinity contexts (CU_EXEC_AFFINITY_TYPE_SM_COUNT) fail with
+# CUDA_ERROR_UNSUPPORTED_EXEC_AFFINITY if the client can't talk to MPS.
+# If the daemon uses a non-default pipe dir, set CUDA_MPS_PIPE_DIRECTORY
+# in your environment before running.
 if ! pgrep -f nvidia-cuda-mps-control >/dev/null; then
     echo "WARNING: nvidia-cuda-mps-control daemon not found. Start MPS before running this test; affinity contexts will fail otherwise." >&2
+else
+    mps_pipe_dir="${CUDA_MPS_PIPE_DIRECTORY:-/tmp/nvidia-mps}"
+    if [ ! -S "$mps_pipe_dir/control" ]; then
+        echo "WARNING: CUDA_MPS_PIPE_DIRECTORY=$mps_pipe_dir has no control socket. Export CUDA_MPS_PIPE_DIRECTORY pointing to your MPS daemon's pipe dir, or affinity contexts will fail with CUDA_ERROR_UNSUPPORTED_EXEC_AFFINITY." >&2
+    fi
 fi
 
 # Warn if NVSHMEM_HOME does not point at a version that has the symbols the

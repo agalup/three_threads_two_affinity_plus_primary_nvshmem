@@ -132,6 +132,12 @@ static void app_thread_fn(Shared *s, int app_sms) {
 
     CUcontext app_ctx = make_affinity_ctx_serialized(dev, app_sms, "app", rank);
     CKU(cuCtxSetCurrent(app_ctx));
+	CUexecAffinityParam actual{};
+actual.type = CU_EXEC_AFFINITY_TYPE_SM_COUNT;
+CKU(cuCtxGetExecAffinity(&actual, CU_EXEC_AFFINITY_TYPE_SM_COUNT));
+fprintf(stdout, "[rank %d] app thread: actual_sms=%d\n",
+        rank, actual.param.smCount.val);
+fflush(stdout);
 
     int *d_out = nullptr;
     CK(cudaMalloc(&d_out, sizeof(int)));
@@ -164,6 +170,12 @@ static void service_thread_fn(Shared *s, int service_sms) {
 
     CUcontext service_ctx = make_affinity_ctx_serialized(dev, service_sms, "service", rank);
     CKU(cuCtxSetCurrent(service_ctx));
+	CUexecAffinityParam actual{};
+actual.type = CU_EXEC_AFFINITY_TYPE_SM_COUNT;
+CKU(cuCtxGetExecAffinity(&actual, CU_EXEC_AFFINITY_TYPE_SM_COUNT));
+fprintf(stdout, "[rank %d] service thread: actual_sms=%d\n",
+        rank, actual.param.smCount.val);
+fflush(stdout);
 
     int *d_out = nullptr;
     CK(cudaMalloc(&d_out, sizeof(int)));
@@ -221,6 +233,13 @@ static void nvshmem_thread_fn(Shared *s, int argc, char **argv) {
     // Primary/runtime context path on this thread.
     CK(cudaSetDevice(gpu));
 
+	int visible_sms = -1;
+CK(cudaDeviceGetAttribute(&visible_sms, cudaDevAttrMultiProcessorCount, gpu));
+fprintf(stdout,
+        "[rank %d] nvshmem thread: visible_sms=%d on current context\n",
+        rank, visible_sms);
+fflush(stdout);
+
     MPI_Comm comm = MPI_COMM_WORLD;
     nvshmemx_init_attr_t attr = NVSHMEMX_INIT_ATTR_INITIALIZER;
     attr.mpi_comm = &comm;
@@ -268,6 +287,27 @@ int main(int argc, char **argv) {
     // Adjust for your GPU. Keep conservative first.
     int app_sms = 20;
     int service_sms = 20;
+
+//    // nvshmem thread is disabled; without it nothing sets shared.ready and
+//    // the app/service threads block on the condvar. Pull rank/gpu from the
+//    // mpirun env (OMPI_COMM_WORLD_RANK) so we can populate shared here.
+//    const char *rank_env = std::getenv("OMPI_COMM_WORLD_RANK");
+//    const char *size_env = std::getenv("OMPI_COMM_WORLD_SIZE");
+//    int rank   = rank_env ? std::atoi(rank_env) : 0;
+//    int nranks = size_env ? std::atoi(size_env) : 1;
+//
+//    int ngpus = 0;
+//    CK(cudaGetDeviceCount(&ngpus));
+//    int gpu = rank % ngpus;
+//
+//    {
+//        std::lock_guard<std::mutex> lock(shared.m);
+//        shared.rank = rank;
+//        shared.nranks = nranks;
+//        shared.gpu = gpu;
+//        shared.ready = true;
+//    }
+//    shared.cv.notify_all();
 
     std::thread nvshmem_thread(nvshmem_thread_fn, &shared, argc, argv);
     std::thread app_thread(app_thread_fn, &shared, app_sms);
