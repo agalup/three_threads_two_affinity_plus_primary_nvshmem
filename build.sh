@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
-NVSHMEM_HOME="/home/agnes/nvshmem-3.6.5-cuda13"
 MPI_INC="/usr/lib/x86_64-linux-gnu/openmpi/include"
 MPI_LIB="/usr/lib/x86_64-linux-gnu/openmpi/lib"
 SRC="$(dirname "$0")/three_threads_two_affinity_plus_primary_nvshmem_fixed.cu"
