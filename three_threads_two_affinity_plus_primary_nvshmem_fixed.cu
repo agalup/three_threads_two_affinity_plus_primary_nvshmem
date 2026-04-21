@@ -84,10 +84,12 @@ __global__ void service_kernel(int *out, int rank) {
     }
 }
 
-__global__ void nvshmem_put_kernel(int *mailbox, int value, int peer) {
+__global__ void nvshmem_put_kernel(int *mailbox, int value, int peer, int iters) {
     if (blockIdx.x == 0 && threadIdx.x == 0) {
-        nvshmem_int_p(mailbox, value, peer);
-        nvshmem_quiet();
+        for (int i = 0; i < iters; ++i) {
+            nvshmem_int_p(mailbox, value + i, peer);
+            nvshmem_quiet();
+        }
     }
 }
 
@@ -264,7 +266,8 @@ fflush(stdout);
     nvshmem_barrier_all();
 
     int my_value = 3000 + mype;
-    nvshmem_put_kernel<<<1,1>>>(mailbox, my_value, peer);
+	int iters = 100;
+    nvshmem_put_kernel<<<1,1>>>(mailbox, my_value, peer, iters);
     CK(cudaDeviceSynchronize());
 
     nvshmem_barrier_all();
@@ -273,7 +276,7 @@ fflush(stdout);
     CK(cudaMemcpy(&host_val, mailbox, sizeof(int), cudaMemcpyDeviceToHost));
     fprintf(stdout,
             "[rank %d] nvshmem thread: mailbox=%d expected=%d\n",
-            rank, host_val, 3000 + peer);
+            rank, host_val, 3000 + peer + iters - 1);
     fflush(stdout);
 
     nvshmem_free(mailbox);
