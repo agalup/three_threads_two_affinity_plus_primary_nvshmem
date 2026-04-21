@@ -12,6 +12,13 @@ export NVSHMEM_REMOTE_TRANSPORT="${NVSHMEM_REMOTE_TRANSPORT:-none}"
 export CUDA_MPS_PIPE_DIRECTORY=/home/agnes/mps/mps
 export CUDA_MPS_LOG_DIRECTORY=/home/agnes/mps/log
 
+# Private tmpdir silences "PMIX ERROR: NO-PERMISSIONS ... dstore_base.c:238".
+# Default /tmp is shared + other users' PMIx stores block OpenMPI's cleanup.
+OMPI_TMPDIR="/tmp/$USER-ompi"
+mkdir -p "$OMPI_TMPDIR"
+chmod 700 "$OMPI_TMPDIR"
+export TMPDIR="$OMPI_TMPDIR"
+
 DIR="$(dirname "$0")"
 BIN="$DIR/three_threads_two_affinity_plus_primary_nvshmem_fixed"
 if [ ! -x "$BIN" ]; then "$DIR/build.sh"; fi
@@ -19,4 +26,4 @@ if [ ! -x "$BIN" ]; then "$DIR/build.sh"; fi
 # env prefix forces mpirun to see the corrected LD_LIBRARY_PATH; `export` alone
 # doesn't reach orted-spawned children reliably.
 env LD_LIBRARY_PATH="$LD_LIBRARY_PATH" \
-    mpirun -x LD_LIBRARY_PATH -x NVSHMEM_REMOTE_TRANSPORT -x CUDA_MPS_PIPE_DIRECTORY -x CUDA_MPS_LOG_DIRECTORY -n 2 "$BIN"
+    mpirun --mca orte_tmpdir_base "$OMPI_TMPDIR" -x LD_LIBRARY_PATH -x NVSHMEM_REMOTE_TRANSPORT -x CUDA_MPS_PIPE_DIRECTORY -x CUDA_MPS_LOG_DIRECTORY -x TMPDIR -n 2 "$BIN"
